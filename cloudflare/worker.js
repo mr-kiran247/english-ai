@@ -1,5 +1,10 @@
-const ALLOWED_ORIGIN = 'https://englishai.technokiran.online';
-const VERSION = 'speakstep-worker-1';
+const ALLOWED_ORIGINS = new Set([
+  'https://englishai.technokiran.online',
+  'https://www.englishai.technokiran.online',
+  'https://technokiran.online',
+  'https://www.technokiran.online',
+]);
+const VERSION = 'speakstep-worker-2';
 
 function generationConfig(model) {
   const config = { responseMimeType: 'application/json', maxOutputTokens: 768 };
@@ -13,20 +18,22 @@ export function createWorker(fetchGoogle = fetch) {
     async fetch(request, env) {
       const origin = request.headers.get('Origin');
       const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Vary': 'Origin', 'X-Content-Type-Options': 'nosniff' };
-      if (origin === ALLOWED_ORIGIN) {
-        headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGIN;
+      if (ALLOWED_ORIGINS.has(origin)) {
+        headers['Access-Control-Allow-Origin'] = origin;
         headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS';
         headers['Access-Control-Allow-Headers'] = 'Content-Type';
       }
       const reply = (status, body) => new Response(JSON.stringify(body), { status, headers });
-      if (origin && origin !== ALLOWED_ORIGIN) return reply(403, { error: 'This website is not allowed to use the tutor.' });
+      if (origin && !ALLOWED_ORIGINS.has(origin)) return reply(403, { error: 'This website is not allowed to use the tutor.' });
       const path = new URL(request.url).pathname;
       if (path !== '/' && path !== '/translate') return reply(404, { error: 'Endpoint not found.' });
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       const key = typeof env.GEMINI_API_KEY === 'string' ? env.GEMINI_API_KEY.trim() : '';
       if (request.method === 'GET') return reply(200, { version: VERSION, status: key ? 'configured' : 'missing_secret', note: key ? 'Submit a sentence to test Gemini access.' : 'Add GEMINI_API_KEY as a Cloudflare Secret, then deploy.' });
       if (request.method !== 'POST') return reply(405, { error: 'Use POST to translate a sentence.' });
-      if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) return reply(415, { error: 'Send a JSON sentence.' });
+      const mediaType = request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase();
+      // JSON carried as text/plain avoids an OPTIONS preflight for browser clients.
+      if (!['application/json', 'text/plain'].includes(mediaType)) return reply(415, { error: 'Send a JSON sentence using application/json or text/plain.' });
       // Bound actual bytes read, including chunked requests without Content-Length.
       let input;
       try {

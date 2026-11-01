@@ -60,3 +60,13 @@ test('network errors do not leak credentials or raw upstream messages',async()=>
 test('optional rate limiter blocks requests before Google',async()=>{
  const r=await createWorker(()=>assert.fail()).fetch(post(),{...env,TRANSLATION_LIMITER:{limit:async()=>({success:false})}});assert.equal(r.status,429);
 });
+
+test('allows owned HTTPS domain variants but rejects lookalikes and HTTP',async()=>{
+ for(const site of ['https://technokiran.online','https://www.technokiran.online','https://www.englishai.technokiran.online']){
+ const r=await createWorker().fetch(new Request('https://test.workers.dev/',{headers:{Origin:site}}),env);
+ assert.equal(r.status,200);assert.equal(r.headers.get('Access-Control-Allow-Origin'),site);
+ }
+ for(const site of ['https://technokiran.online.evil.example','http://englishai.technokiran.online']){
+ const r=await createWorker().fetch(new Request('https://test.workers.dev/',{headers:{Origin:site}}),env);assert.equal(r.status,403);
+ }
+});

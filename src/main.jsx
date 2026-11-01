@@ -1,5 +1,6 @@
 import React, {useState, useRef, useEffect} from 'react';
 import {startSpeech} from './speech.js';
+import {requestLesson} from './translation.js';
 import {createRoot} from 'react-dom/client';
 import './style.css';
 
@@ -34,10 +35,7 @@ function App(){
   setTranslating(true);
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),75000);
   try{
-   const response=await fetch(window.SPEAKSTEP_TRANSLATION_URL || '/api/translate.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:input.trim(),language}),signal:controller.signal});
-   let data;try{data=await response.json()}catch{throw new Error('Translation server did not return JSON. Check that the Cloudflare Worker code is deployed and app-config.js points to its address.');}
-   if(!response.ok)throw new Error(data.error||'Translation failed. Please try again.');
-   if(typeof data.en!=='string'||!data.en.trim()||typeof data.tip!=='string')throw new Error('The tutor returned an incomplete lesson. Please try again.');
+   const data=await requestLesson({text:input,language,endpoint:window.SPEAKSTEP_TRANSLATION_URL,origin:window.location.origin,signal:controller.signal});
    setLesson({en:data.en,tip:data.tip});
   }catch(error){setMessage(error.name==='AbortError'?'Translation took too long. Please try again.':error.message||'Could not connect. Please check your internet connection.');}
   finally{clearTimeout(timer);setTranslating(false);}
