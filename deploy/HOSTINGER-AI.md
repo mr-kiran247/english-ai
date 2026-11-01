@@ -22,7 +22,7 @@ If the Speak button reports a speech-service or language error, tap the sentence
 
 For an existing deployment, you only need to replace `public_html/api/translate.php` with the latest `public/api/translate.php` from GitHub. This preserves your private API key. Alternatively upload the full new ZIP. Do not replace your real private configuration with the example placeholder.
 
-Open `https://englishai.technokiran.online/api/translate.php`. A working local setup returns JSON containing `version: 2026-11-01-timeout-fix`, `configuration: loaded`, `provider: gemini`, and `api_key_present: true`. It never returns the key or absolute paths. This checks local configuration, not API validity or quota. If an older message appears, the updated endpoint is not being served at this domain.
+Open `https://englishai.technokiran.online/api/translate.php`. A working local setup returns JSON containing `version: 2026-11-01-gemini-fast`, `configuration: loaded`, `provider: gemini`, and `api_key_present: true`. It never returns the key or absolute paths. This checks local configuration, not API validity or quota. If an older message appears, the updated endpoint is not being served at this domain.
 
 The backend trims/case-normalizes provider names, defaults to Gemini, normalizes a `models/` prefix, and reports configuration syntax errors. When Gemini returns 404, it asks Google's model catalog for stable Flash models supporting generateContent and retries once using an advertised model. This does not bypass provider access or billing requirements.
 
@@ -42,3 +42,9 @@ Backend checks execute PHP 8.3 in WebAssembly, including configuration errors, b
 ## Hostinger cURL timeout (28)
 
 The backend now requests IPv4, allows up to 45 seconds per provider request and shares a 65-second total budget across model recovery calls. TLS verification remains enabled. An error distinguishes failure to establish a TCP connection from a connection that receives no complete response in time. These are diagnostics, not proof of a specific Hostinger firewall or Google outage. If timeouts persist, ask Hostinger to inspect PHP cURL DNS/HTTPS connectivity to generativelanguage.googleapis.com on port 443. Keep credentials out of support screenshots. Provider access cannot be validated from local mock tests.
+
+## Low-latency Gemini requests
+
+Version `2026-11-01-gemini-fast` caps Gemini responses at 768 output tokens and disables thinking only for Gemini 2.5 Flash/Flash-Lite, which support `thinkingBudget: 0`. Other model generations do not receive that parameter. The model-specific configuration is recomputed after model discovery. The transport uses verified HTTPS with HTTP/1.1 and an empty Expect header. A transient transport failure can retry once with automatic IP-family selection after the initial IPv4 attempt; the entire operation shares the existing 65-second budget. Translation calls that time out may have reached Google, so retrying may consume additional provider quota.
+
+TCP connection, TLS handshake, and response timings are checked independently. A TCP connection alone does not prove the AI service accepted the request. A persistent TLS-stage error or outbound network restriction cannot be resolved by changing the translation prompt. No successful live Hostinger-to-Gemini translation is claimed by the local regression suite.

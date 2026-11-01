@@ -39,7 +39,7 @@ const mocks=`<?php namespace Fixture;
 foreach (['CURLOPT_HTTPHEADER','CURLOPT_RETURNTRANSFER','CURLOPT_CONNECTTIMEOUT','CURLOPT_TIMEOUT','CURLOPT_SSL_VERIFYPEER','CURLOPT_SSL_VERIFYHOST','CURLOPT_POST','CURLOPT_POSTFIELDS','CURLINFO_HTTP_CODE'] as $i=>$name) defined($name) || define($name,$i+1);
 $GLOBALS['calls']=0;
 function curl_init($url){return (object)['url'=>$url];}
-function curl_setopt_array($curl,$options){$curl->options=$options;if($options[CURLOPT_IPRESOLVE]!==CURL_IPRESOLVE_V4)throw new \\Exception('IPv4 missing');if($options[CURLOPT_TIMEOUT]<=20||$options[CURLOPT_TIMEOUT]>65)throw new \\Exception('Timeout budget incorrect');if(!$options[CURLOPT_SSL_VERIFYPEER])throw new \\Exception('TLS verification disabled');return true;}
+function curl_setopt_array($curl,$options){$curl->options=$options;if(!in_array($options[CURLOPT_IPRESOLVE],[CURL_IPRESOLVE_V4,CURL_IPRESOLVE_WHATEVER],true))throw new \\Exception('Address selection incorrect');if($options[CURLOPT_HTTP_VERSION]!==CURL_HTTP_VERSION_1_1)throw new \\Exception('HTTP version incorrect');if(!$options[CURLOPT_SSL_VERIFYHOST])throw new \\Exception('TLS hostname verification disabled');if($options[CURLOPT_TIMEOUT]<=20||$options[CURLOPT_TIMEOUT]>65)throw new \\Exception('Timeout budget incorrect');if(!$options[CURLOPT_SSL_VERIFYPEER])throw new \\Exception('TLS verification disabled');return true;}
 function curl_exec($curl){
  $i=$GLOBALS['calls']++;
  if($i===0){if(!str_contains($curl->url,'gemini-0.0-flash:generateContent'))throw new \\Exception('Wrong original URL');return '{"error":{"status":"NOT_FOUND"}}';}
@@ -57,12 +57,46 @@ assert.equal(translated.httpStatusCode,200,translated.text+' '+translated.errors
 assert.deepEqual(JSON.parse(translated.text),{en:'Have you eaten?',tip:'A question about a completed action.'});
 console.log('PASS 404 model discovery, retry and thought filtering (mock provider)');checks++;
 // Simulate a connection timeout without waiting or making a network request.
-const timeoutMocks=mocks.replace('function curl_errno($curl){return 0;}', 'function curl_errno($curl){return 28;}').replace('return $GLOBALS[\'calls\']===1?404:200;', 'return 0;').replace("$i=$GLOBALS['calls']++;", "return false; $i=$GLOBALS['calls']++;");
+const timeoutMocks=mocks.replace('function curl_errno($curl){return 0;}', 'function curl_errno($curl){return 28;}').replace('return $GLOBALS[\'calls\']===1?404:200;', 'return 0;').replace("$i=$GLOBALS['calls']++;", "file_put_contents('/site/timeout-attempts','1',FILE_APPEND); return false; $i=$GLOBALS['calls']++;");
 php.writeFile('/site/public_html/api/timeout.php',timeoutMocks);
 const timedOut=await php.run({scriptPath:'/site/public_html/api/timeout.php',method:'POST',headers:{'Content-Type':'application/json'},body:new TextEncoder().encode(JSON.stringify({text:'नमस्कार',language:'mr'}))});
 assert.equal(timedOut.httpStatusCode,504,timedOut.text);
 assert.match(JSON.parse(timedOut.text).error,/before establishing a connection/);
 assert.ok(!timedOut.text.includes('test-secret'));
-console.log('PASS connection timeout diagnostic with secret redaction');checks++;
+assert.equal(php.readFileAsText('/site/timeout-attempts'),'11');
+console.log('PASS connection timeout diagnostic with one bounded retry and secret redaction');checks++;
+
+php.writeFile('/site/private/englishai-config.php',"<?php return ['provider'=>'gemini','api_key'=>'test-secret','model'=>'gemini-2.5-flash'];");
+const successExec=`function curl_exec($curl){
+ $payload=json_decode($curl->options[CURLOPT_POSTFIELDS],true);
+ if(($payload['generationConfig']['thinkingConfig']['thinkingBudget']??null)!==0)throw new \\Exception('Thinking was not disabled');
+ if(($payload['generationConfig']['maxOutputTokens']??0)!==768)throw new \\Exception('Output limit missing');
+ if(!in_array('Expect:',$curl->options[CURLOPT_HTTPHEADER],true))throw new \\Exception('Expect header not suppressed');
+ return json_encode(['candidates'=>[['content'=>['parts'=>[['text'=>json_encode(['en'=>'Have you eaten?','tip'=>'A question.'])]]]]]]);
+}
+`;
+const fastMocks=mocks.replace(/function curl_exec\(\$curl\)\{[\s\S]*?\nfunction curl_errno/,successExec+'function curl_errno');
+php.writeFile('/site/public_html/api/fast.php',fastMocks);
+const post={method:'POST',headers:{'Content-Type':'application/json'},body:new TextEncoder().encode(JSON.stringify({text:'तू जेवण केले का',language:'mr'}))};
+const fast=await php.run({scriptPath:'/site/public_html/api/fast.php',...post});
+assert.equal(fast.httpStatusCode,200,fast.text+' '+fast.errors);
+assert.equal(JSON.parse(fast.text).en,'Have you eaten?');
+console.log('PASS Gemini thinking disabled, output bounded, HTTP/1.1, TLS enabled');checks++;
+const tlsMocks=timeoutMocks.replace("function curl_getinfo($curl,$option){return 0;}","function curl_getinfo($curl,$option){return $option===CURLINFO_CONNECT_TIME?1:0;}");
+php.writeFile('/site/public_html/api/tls.php',tlsMocks);
+const tls=await php.run({scriptPath:'/site/public_html/api/tls.php',...post});
+assert.equal(tls.httpStatusCode,504,tls.text);assert.match(JSON.parse(tls.text).error,/TLS handshake timed out/);
+console.log('PASS TLS stall distinguished from generation timeout');checks++;
+const responseMocks=timeoutMocks.replace("function curl_getinfo($curl,$option){return 0;}","function curl_getinfo($curl,$option){return in_array($option,[CURLINFO_CONNECT_TIME,CURLINFO_APPCONNECT_TIME],true)?1:0;}");
+php.writeFile('/site/public_html/api/response-timeout.php',responseMocks);
+const delayed=await php.run({scriptPath:'/site/public_html/api/response-timeout.php',...post});
+assert.equal(delayed.httpStatusCode,504,delayed.text);assert.match(JSON.parse(delayed.text).error,/TLS succeeded/);
+console.log('PASS connected TLS with no response diagnosed separately');checks++;
+const retryMocks=fastMocks.replace("$payload=json_decode", "if($GLOBALS['calls']++===0)return false; $payload=json_decode").replace("function curl_errno($curl){return 0;}","function curl_errno($curl){return $GLOBALS['calls']===1?28:0;}");
+php.writeFile('/site/public_html/api/retry.php',retryMocks);
+const recovered=await php.run({scriptPath:'/site/public_html/api/retry.php',...post});
+assert.equal(recovered.httpStatusCode,200,recovered.text+' '+recovered.errors);
+assert.equal(JSON.parse(recovered.text).en,'Have you eaten?');
+console.log('PASS transient timeout recovered by retry');checks++;
 console.log(`${checks} PHP runtime checks passed`);
 php.exit();
