@@ -11,3 +11,9 @@ The new upload ZIP contains a React frontend and `api/translate.php`. PHP 8.1+ w
 The default global limit is 100 provider attempts per UTC day, shared by all visitors. Failed provider calls also count. Configure provider spending limits too. A public site can have its quota used by visitors; use Hostinger password protection if this is a personal tutor. No learner sentence or API key is stored in the usage counter. Custom sentences are sent to your selected AI provider; example chips work locally.
 
 Errors distinguish missing configuration, inaccessible provider, rejected credentials, and exhausted quotas. Never expose raw provider responses or secrets to visitors. If translation fails, share the on-screen error text, not the API key.
+
+## iPhone Safari voice input
+
+Use the HTTPS site directly in Safari. Allow microphone access for the site (Safari page settings → Website Settings → Microphone; labels vary by iOS version). Check iPhone Settings for Siri and Dictation access, including any Screen Time restrictions. Under Settings → General → Keyboard, enable Dictation if using keyboard voice input. Available dictation and web speech languages vary by device and iOS version; Marathi/Hindi recognition is not guaranteed by Safari merely exposing the API.
+
+If the Speak button reports a speech-service or language error, tap the sentence text box and use the iPhone keyboard's microphone with a supported dictation language, then tap Teach me in English. If your device does not support dictation in your language, type the sentence instead. The updated UI shows the actual speech error category. No physical iPhone validation has been performed in the cloud environment.
