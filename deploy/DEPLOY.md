@@ -1,6 +1,6 @@
 # Deploy englishai.technokiran.online
 
-This is a static React frontend. Production serves the contents of `dist/`; it does not run the Vite development server. Free-form AI translation still needs a backend. Never deploy AI provider keys in frontend files.
+This is a React frontend with a PHP translation endpoint. Production serves the contents of `dist/`; it does not run the Vite development server. For real sentence translation on Hostinger, follow [HOSTINGER-AI.md](HOSTINGER-AI.md). PHP 8.1+ with cURL and a private provider key configuration are required. Never deploy AI provider keys in frontend files. The Nginx example below serves the frontend only; a VPS additionally needs PHP-FPM configured for the endpoint.
 
 ## DNS and HTTPS
 
@@ -11,7 +11,7 @@ HTTPS is required for microphone access on this domain. Users must also grant br
 ## Shared hosting / cPanel
 
 1. Add `englishai.technokiran.online` as a domain/subdomain in the hosting panel and note its document root.
-2. Upload and extract `englishai-site.tar.gz` into that document root. `index.html` and `assets/` must be directly inside the document root, without an extra `dist` directory.
+2. Upload and extract `englishai-site.zip` into that document root. `index.html`, `assets/`, and `api/` must be directly inside the document root, without an extra `dist` directory. Configure Gemini using HOSTINGER-AI.md.
 3. Enable the host's SSL certificate / AutoSSL and force HTTPS after certificate issuance succeeds.
 4. Open the HTTPS domain and verify example translation, English audio, daily task completion, and microphone permissions.
 

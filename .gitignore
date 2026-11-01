@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 .env.local
+englishai-config.php
+englishai-usage.json
