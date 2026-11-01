@@ -30,11 +30,11 @@ test('invalid input is rejected before using provider quota',async()=>{
 test('rejects oversized actual body',async()=>{
  const r=await createWorker(()=>assert.fail()).fetch(post({text:'a'.repeat(9000),language:'hi'}),env);assert.equal(r.status,413);
 });
-test('translation uses secret server-side, bounded output and no thinking',async()=>{
+test('translation uses Gemini 3.5 with bounded output and compatible parameters',async()=>{
  const worker=createWorker(async(url,options)=>{
- assert.match(url,/gemini-2\.5-flash-lite:generateContent$/);
+ assert.match(url,/gemini-3\.5-flash-lite:generateContent$/);
  assert.equal(options.headers['x-goog-api-key'],key);
- const payload=JSON.parse(options.body);assert.equal(payload.generationConfig.thinkingConfig.thinkingBudget,0);assert.equal(payload.generationConfig.maxOutputTokens,768);
+ const payload=JSON.parse(options.body);assert.equal(payload.generationConfig.thinkingConfig,undefined);assert.equal(payload.generationConfig.maxOutputTokens,768);
  assert.equal(payload.contents[0].parts[0].text,'तू जेवण केले का');return googleSuccess();
  });
  const r=await worker.fetch(post(),env);assert.equal(r.status,200);assert.equal(r.headers.get('Access-Control-Allow-Origin'),origin);assert.deepEqual(await r.json(),lesson);
@@ -120,6 +120,15 @@ test('generation 404 preserves redacted provider reason instead of claiming no m
  return Response.json({error:{message:`Requested model is not supported. key=${key}`}},{status:404});
  });
  const r=await worker.fetch(post(),env);const body=await r.json();
- assert.equal(r.status,502);assert.equal(body.version,'speakstep-worker-4');assert.match(body.error,/Requested model is not supported/);
- assert.ok(!JSON.stringify(body).includes(key));assert.deepEqual(body.attempted_models,['gemini-2.5-flash-lite']);
+ assert.equal(r.status,502);assert.equal(body.version,'speakstep-worker-5');assert.match(body.error,/Requested model is not supported/);
+ assert.ok(!JSON.stringify(body).includes(key));assert.deepEqual(body.attempted_models,['gemini-3.5-flash-lite']);
+});
+
+test('retired Gemini 2.5 Flash-Lite override migrates to provider-recommended 3.5',async()=>{
+ const urls=[];const worker=createWorker(async(url,options)=>{
+ urls.push(url);assert.match(url,/gemini-3\.5-flash-lite:generateContent$/);
+ assert.equal(JSON.parse(options.body).generationConfig.thinkingConfig,undefined);
+ return googleSuccess();
+ });
+ const r=await worker.fetch(post(),{...env,GEMINI_MODEL:'models/gemini-2.5-flash-lite'});assert.equal(r.status,200);assert.equal(urls.length,1);
 });

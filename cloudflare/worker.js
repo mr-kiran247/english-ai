@@ -4,7 +4,7 @@ const ALLOWED_ORIGINS = new Set([
   'https://technokiran.online',
   'https://www.technokiran.online',
 ]);
-const VERSION = 'speakstep-worker-4';
+const VERSION = 'speakstep-worker-5';
 
 function generationConfig(model) {
   const config = { responseMimeType: 'application/json', maxOutputTokens: 768 };
@@ -83,7 +83,9 @@ export function createWorker(fetchGoogle = fetch, timing = {}) {
         const result = await env.TRANSLATION_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'anonymous' });
         if (!result.success) return reply(429, { error: 'Too many translations. Please wait a minute.' });
       }
-      let model = typeof env.GEMINI_MODEL === 'string' ? env.GEMINI_MODEL.trim().replace(/^models\//, '') : 'gemini-2.5-flash-lite';
+      let model = typeof env.GEMINI_MODEL === 'string' ? env.GEMINI_MODEL.trim().replace(/^models\//, '') : 'gemini-3.5-flash-lite';
+      // Google rejects this retired model for new users; migrate old overrides too.
+      if (model === 'gemini-2.5-flash-lite') model = 'gemini-3.5-flash-lite';
       if (!/^gemini-[a-zA-Z0-9._-]+$/.test(model)) return reply(503, { error: 'GEMINI_MODEL must be a Gemini model ID, without a URL.' });
       const deadline = Date.now() + 45000;
       const requestBudget = () => Math.max(1, Math.min(timing.translationMs ?? 18000, deadline - Date.now()));
@@ -103,9 +105,9 @@ export function createWorker(fetchGoogle = fetch, timing = {}) {
       try {
         let response; let recovered = false;
         try { response = await callModel(model); }
-        catch { recovered = true; model = model === 'gemini-2.5-flash-lite' ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite'; response = await callModel(model); }
+        catch { recovered = true; model = model === 'gemini-3.5-flash-lite' ? 'gemini-3.5-flash' : 'gemini-3.5-flash-lite'; response = await callModel(model); }
         if (!recovered && [500, 502, 503, 504].includes(response.status)) {
-          model = model === 'gemini-2.5-flash-lite' ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite';
+          model = model === 'gemini-3.5-flash-lite' ? 'gemini-3.5-flash' : 'gemini-3.5-flash-lite';
           response = await callModel(model);
         }
         if (response.status === 404) {

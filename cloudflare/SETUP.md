@@ -4,7 +4,7 @@ Worker URL: `https://englishai-api.kiran-sontakke247work.workers.dev`
 
 1. In the Worker dashboard click **Edit code**. Replace the entire Hello World script with `cloudflare/worker.js` and click **Deploy**.
 2. Open **Settings → Variables and Secrets → Add**. Select **Secret**, name it `GEMINI_API_KEY`, and paste the real Google AI Studio key into its value. Save/deploy. Never put the key in Worker source, the React code, GitHub, or chat.
-3. Visit the Worker URL. It should show `version: speakstep-worker-4` and `status: configured`. This health check does not call Google or validate the key. `missing_secret` means the secret has not been applied.
+3. Visit the Worker URL. It should show `version: speakstep-worker-5` and `status: configured`. This health check does not call Google or validate the key. `missing_secret` means the secret has not been applied.
 4. Upload/extract the updated `deploy/englishai-site.zip` into the Hostinger document root. Include the new `app-config.js`, updated `index.html`, and assets. Preserve your existing private configuration and files. This build calls the Worker, so no PHP connection is needed for translation.
 5. Open `https://englishai.technokiran.online`, reload without cached files, and try a custom Marathi/Hindi sentence. Test actual translation before removing the old PHP endpoint.
 
@@ -24,7 +24,7 @@ Run `node tests/worker.test.js`, `node tests/translation.test.js` and `npm run b
 
 Deploy the latest Worker version and the new website ZIP. Cross-origin frontend requests carry JSON as text/plain to avoid an OPTIONS preflight. The Worker still validates JSON and limits body size. PHP rollback continues to send application/json. Do not use mode: no-cors, which would hide translations from the app.
 
-Confirm the Worker GET reports speakstep-worker-4, clear website cache, then retry. A network error now includes the exact endpoint and website origin. If it persists, those values and the browser Network/Console error are needed to distinguish content-security-policy restrictions, Cloudflare Access/challenges, DNS errors, and blocked origins. Direct GET success does not prove a browser cross-origin POST works. Public URLs could not be inspected from this execution environment because its outbound proxy denied those destinations.
+Confirm the Worker GET reports speakstep-worker-5, clear website cache, then retry. A network error now includes the exact endpoint and website origin. If it persists, those values and the browser Network/Console error are needed to distinguish content-security-policy restrictions, Cloudflare Access/challenges, DNS errors, and blocked origins. Direct GET success does not prove a browser cross-origin POST works. Public URLs could not be inspected from this execution environment because its outbound proxy denied those destinations.
 
 ## Worker v3: Gemini timeouts
 
@@ -41,3 +41,7 @@ Tests cover successful model-timeout recovery and both-model timeouts using simu
 ## Worker v4: listed model still returns 404
 
 Only replace/deploy the Worker script. Keep the website build and Secret unchanged. Model discovery now includes the advertised gemini-flash-lite-latest and gemini-flash-latest aliases. It skips models already attempted, tries at most two new advertised candidates on 404 within the existing deadline, and no longer equates a generation 404 with an empty model list. Persistent 404s include the attempted model name and a bounded provider explanation with API keys redacted. Check the actual explanation before changing keys, endpoints, or model IDs again.
+
+## Worker v5: provider-confirmed model retirement
+
+Google returned an explicit generation error saying gemini-2.5-flash-lite is no longer available to new users and recommending gemini-3.5-flash-lite. The Worker now uses that recommended model by default, migrates an existing GEMINI_MODEL override of gemini-2.5-flash-lite (including models/ prefix), and uses gemini-3.5-flash for transient-error recovery. Gemini 2.5-only thinkingBudget parameters are not sent to Gemini 3.5. Deploy worker.js only; keep your Secret and Hostinger files unchanged. Google recommends the Interactions API, but that recommendation alone does not establish that generateContent is unavailable for the replacement model. Verify a real generation after deployment.
