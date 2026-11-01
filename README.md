@@ -21,9 +21,11 @@ Build with `npm run build`. Dependencies are pinned in `package-lock.json`.
 - A rotating daily speaking task, answer recording/transcription, and local progress storage. Completion is self-reported, not AI grading. There are no push notifications.
 - Responsive learning, practice, and progress screens.
 
-## Real sentence translation on Hostinger
+## Real sentence translation using Cloudflare
 
-Custom Marathi and Hindi sentences are sent to `/api/translate.php`, a PHP backend that calls Google Gemini (or OpenAI). Configure a server-side API key using [the Hostinger setup guide](deploy/HOSTINGER-AI.md). The downloadable [deployment ZIP](deploy/englishai-site.zip) includes the PHP endpoint. Never put a secret in a Vite frontend variable. Translation requires a configured provider with available API quota; example lessons continue to work locally.
+The default build sends custom Marathi/Hindi sentences to the Cloudflare Worker configured in `public/app-config.js`. Deploy `cloudflare/worker.js` and add the Gemini API key as a Worker Secret using [the Cloudflare setup guide](cloudflare/SETUP.md). Example lessons remain local. The deployment ZIP includes the new endpoint configuration and website build; uploading it does not deploy the Worker itself.
+
+The previous PHP backend is retained as an alternative. To use it, set the public endpoint to `/api/translate.php` and follow [the Hostinger PHP guide](deploy/HOSTINGER-AI.md). Never put provider keys in the public configuration.
 
 Vite serves the frontend during development; it cannot execute PHP. Use a PHP-enabled server for full-stack testing. Browser text recognition alone cannot evaluate pronunciation, and this app does not grade pronunciation or grammar.
 

@@ -34,8 +34,8 @@ function App(){
   setTranslating(true);
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),75000);
   try{
-   const response=await fetch('/api/translate.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:input.trim(),language}),signal:controller.signal});
-   let data;try{data=await response.json()}catch{throw new Error('Translation server is unavailable. Check that the updated api folder is uploaded and PHP is enabled on Hostinger.');}
+   const response=await fetch(window.SPEAKSTEP_TRANSLATION_URL || '/api/translate.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:input.trim(),language}),signal:controller.signal});
+   let data;try{data=await response.json()}catch{throw new Error('Translation server did not return JSON. Check that the Cloudflare Worker code is deployed and app-config.js points to its address.');}
    if(!response.ok)throw new Error(data.error||'Translation failed. Please try again.');
    if(typeof data.en!=='string'||!data.en.trim()||typeof data.tip!=='string')throw new Error('The tutor returned an incomplete lesson. Please try again.');
    setLesson({en:data.en,tip:data.tip});
