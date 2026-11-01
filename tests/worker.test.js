@@ -32,7 +32,7 @@ test('rejects oversized actual body',async()=>{
 });
 test('translation uses secret server-side, bounded output and no thinking',async()=>{
  const worker=createWorker(async(url,options)=>{
- assert.match(url,/gemini-2\.5-flash:generateContent$/);
+ assert.match(url,/gemini-2\.5-flash-lite:generateContent$/);
  assert.equal(options.headers['x-goog-api-key'],key);
  const payload=JSON.parse(options.body);assert.equal(payload.generationConfig.thinkingConfig.thinkingBudget,0);assert.equal(payload.generationConfig.maxOutputTokens,768);
  assert.equal(payload.contents[0].parts[0].text,'तू जेवण केले का');return googleSuccess();
@@ -69,4 +69,34 @@ test('allows owned HTTPS domain variants but rejects lookalikes and HTTP',async(
  for(const site of ['https://technokiran.online.evil.example','http://englishai.technokiran.online']){
  const r=await createWorker().fetch(new Request('https://test.workers.dev/',{headers:{Origin:site}}),env);assert.equal(r.status,403);
  }
+});
+
+test('model timeout recovers with a different Gemini model',async()=>{
+ const urls=[];const worker=createWorker(async(url,options)=>{
+ urls.push(url);if(urls.length===1)return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('Timed out','AbortError')),{once:true}));
+ return googleSuccess();
+ },{translationMs:5});
+ const r=await worker.fetch(post(),env);assert.equal(r.status,200);assert.equal(urls.length,2);assert.notEqual(urls[0],urls[1]);
+});
+test('two stalled models return bounded timeout with connection-check instructions',async()=>{
+ let calls=0;const worker=createWorker(async(url,options)=>{
+ calls++;return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('Timed out','AbortError')),{once:true}));
+ },{translationMs:5});
+ const r=await worker.fetch(post(),env);assert.equal(r.status,504);assert.equal(calls,2);assert.match((await r.json()).error,/check=google/);
+});
+test('Google connection check advertises models without exposing credentials',async()=>{
+ const worker=createWorker(async(url,options)=>{
+ assert.match(url,/models\?pageSize/);assert.equal(options.headers['x-goog-api-key'],key);
+ return Response.json({models:[{name:'models/gemini-2.5-flash-lite',supportedGenerationMethods:['generateContent']}]});
+ });
+ const r=await worker.fetch(new Request('https://test.workers.dev/?check=google'),env);const body=await r.json();
+ assert.equal(body.google,'reachable');assert.deepEqual(body.available_models,['gemini-2.5-flash-lite']);assert.ok(!JSON.stringify(body).includes(key));
+});
+test('model catalog timeout is distinguished from slow sentence generation',async()=>{
+ const worker=createWorker(async(url,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('Timed out','AbortError')),{once:true})),{checkMs:5});
+ const r=await worker.fetch(new Request('https://test.workers.dev/?check=google'),env);assert.equal(r.status,504);const body=await r.json();assert.equal(body.stage,'model_catalog');assert.equal(body.google,'unreachable');
+});
+test('Google diagnostic distinguishes invalid credentials from reachability',async()=>{
+ const worker=createWorker(async()=>Response.json({error:{status:'PERMISSION_DENIED'}},{status:403}));
+ const r=await worker.fetch(new Request('https://test.workers.dev/?check=google'),env);const body=await r.json();assert.equal(body.google,'rejected');assert.equal(body.http_status,403);
 });
