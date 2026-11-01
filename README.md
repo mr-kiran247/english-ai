@@ -17,7 +17,7 @@ Build with `npm run build`. Dependencies are pinned in `package-lock.json`.
 ## Included
 
 - Six Marathi/Hindi example translations, teaching notes, and English audio playback.
-- Browser speech recognition for Marathi, Hindi, and English where supported; typing is always available. Microphone access requires a secure context and browser permission. Browser speech services may process audio remotely.
+- Browser microphone recording for Marathi, Hindi, and English, sent to Gemini for transcription. Safari can record MP4 without Siri speech recognition. Requires Worker v6, HTTPS and microphone permission. Recording stops at 20 seconds. Typed entry remains available. Browser speech recognition is a fallback when MediaRecorder is unavailable.
 - A rotating daily speaking task, answer recording/transcription, and local progress storage. Completion is self-reported, not AI grading. There are no push notifications.
 - Responsive learning, practice, and progress screens.
 

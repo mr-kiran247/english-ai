@@ -45,3 +45,8 @@ test('distinguishes permission, language and service errors',()=>{
  assert.match(speechError('service-not-allowed'),/Siri & Dictation/);
  assert.match(speechError('unexpected-code'),/unexpected-code/);
 });
+
+test('Safari error resets UI even when onend never arrives',()=>{
+ const {instance,states,errors}=setup();instance.onerror({error:'service-not-allowed'});
+ assert.equal(states.at(-1),'idle');assert.match(errors[0],/speech service/);
+});

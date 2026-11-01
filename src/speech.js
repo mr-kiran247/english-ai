@@ -40,6 +40,8 @@ export function startSpeech({browser = window, language, onText, onStatus, onErr
  recognition.onerror = event => {
   if (disposed) return;
   failed = true;
+  // Safari can emit onerror without ever emitting onend.
+  onStatus('idle');
   onError(speechError(event.error));
  };
  recognition.onend = () => {

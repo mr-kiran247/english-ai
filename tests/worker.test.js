@@ -28,7 +28,7 @@ test('invalid input is rejected before using provider quota',async()=>{
  }
 });
 test('rejects oversized actual body',async()=>{
- const r=await createWorker(()=>assert.fail()).fetch(post({text:'a'.repeat(9000),language:'hi'}),env);assert.equal(r.status,413);
+ const r=await createWorker(()=>assert.fail()).fetch(post({text:'a'.repeat(1450001),language:'hi'}),env);assert.equal(r.status,413);
 });
 test('translation uses Gemini 3.5 with bounded output and compatible parameters',async()=>{
  const worker=createWorker(async(url,options)=>{
@@ -120,7 +120,7 @@ test('generation 404 preserves redacted provider reason instead of claiming no m
  return Response.json({error:{message:`Requested model is not supported. key=${key}`}},{status:404});
  });
  const r=await worker.fetch(post(),env);const body=await r.json();
- assert.equal(r.status,502);assert.equal(body.version,'speakstep-worker-5');assert.match(body.error,/Requested model is not supported/);
+ assert.equal(r.status,502);assert.equal(body.version,'speakstep-worker-6');assert.match(body.error,/Requested model is not supported/);
  assert.ok(!JSON.stringify(body).includes(key));assert.deepEqual(body.attempted_models,['gemini-3.5-flash-lite']);
 });
 
@@ -131,4 +131,22 @@ test('retired Gemini 2.5 Flash-Lite override migrates to provider-recommended 3.
  return googleSuccess();
  });
  const r=await worker.fetch(post(),{...env,GEMINI_MODEL:'models/gemini-2.5-flash-lite'});assert.equal(r.status,200);assert.equal(urls.length,1);
+});
+
+test('Safari MP4 audio is sent to Gemini with a source transcript',async()=>{
+ const worker=createWorker(async(url,options)=>{
+ const body=JSON.parse(options.body);assert.deepEqual(body.contents[0].parts,[{inlineData:{mimeType:'audio/mp4',data:'AQIDBA=='}}]);
+ assert.match(body.systemInstruction.parts[0].text,/transcript/);
+ return Response.json({candidates:[{content:{parts:[{text:JSON.stringify({...lesson,transcript:'तू जेवण केले का'})}]}}]});
+ });
+ const r=await worker.fetch(post({language:'mr',audio:{mimeType:'audio/mp4',data:'AQIDBA=='}}),env);assert.equal(r.status,200);assert.equal((await r.json()).transcript,'तू जेवण केले का');
+});
+test('malformed and oversized audio is rejected before Gemini',async()=>{
+ for(const audio of [{mimeType:'text/plain',data:'AQIDBA=='},{mimeType:'audio/mp4',data:'invalid%%%'}]){
+ const r=await createWorker(()=>assert.fail()).fetch(post({language:'mr',audio}),env);assert.equal(r.status,400);
+ }
+});
+test('unintelligible recording is not presented as a transcript',async()=>{
+ const worker=createWorker(async()=>Response.json({candidates:[{content:{parts:[{text:JSON.stringify({...lesson,transcript:''})}]}}]}));
+ const r=await worker.fetch(post({language:'mr',audio:{mimeType:'audio/mp4',data:'AQIDBA=='}}),env);assert.equal(r.status,422);
 });

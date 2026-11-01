@@ -35,3 +35,11 @@ test('frontend request is accepted by actual Worker handler',async()=>{
  assert.equal(response.headers.get('Access-Control-Allow-Origin'),origin);return response;
  }});assert.deepEqual(result,lesson);
 });
+
+test('audio upload preserves source transcript for the text box',async()=>{
+ const audio={mimeType:'audio/mp4',data:'AQIDBA=='};
+ const result=await requestLesson({...args,text:undefined,audio,fetchImpl:async(url,options)=>{
+ const body=JSON.parse(options.body);assert.deepEqual(body.audio,audio);assert.equal(body.text,undefined);
+ return Response.json({...lesson,transcript:'कुठे गेला होता'});
+ }});assert.equal(result.transcript,'कुठे गेला होता');
+});
