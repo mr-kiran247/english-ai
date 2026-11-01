@@ -100,3 +100,26 @@ test('Google diagnostic distinguishes invalid credentials from reachability',asy
  const worker=createWorker(async()=>Response.json({error:{status:'PERMISSION_DENIED'}},{status:403}));
  const r=await worker.fetch(new Request('https://test.workers.dev/?check=google'),env);const body=await r.json();assert.equal(body.google,'rejected');assert.equal(body.http_status,403);
 });
+
+test('404 recovery uses advertised latest aliases and never repeats failed model',async()=>{
+ const urls=[];const worker=createWorker(async(url)=>{
+ urls.push(url);
+ if(url.includes('models?pageSize'))return Response.json({models:[
+ {name:'models/gemini-3.5-flash-lite',supportedGenerationMethods:['generateContent']},
+ {name:'models/gemini-flash-lite-latest',supportedGenerationMethods:['generateContent']},
+ ]});
+ if(url.includes('gemini-3.5-flash-lite:'))return Response.json({error:{message:'model not found'}},{status:404});
+ assert.match(url,/gemini-flash-lite-latest:generateContent$/);return googleSuccess();
+ });
+ const r=await worker.fetch(post(),{...env,GEMINI_MODEL:'gemini-3.5-flash-lite'});
+ assert.equal(r.status,200);assert.deepEqual(await r.json(),lesson);assert.equal(urls.length,3);
+});
+test('generation 404 preserves redacted provider reason instead of claiming no models',async()=>{
+ const worker=createWorker(async(url)=>{
+ if(url.includes('models?pageSize'))return Response.json({models:[]});
+ return Response.json({error:{message:`Requested model is not supported. key=${key}`}},{status:404});
+ });
+ const r=await worker.fetch(post(),env);const body=await r.json();
+ assert.equal(r.status,502);assert.equal(body.version,'speakstep-worker-4');assert.match(body.error,/Requested model is not supported/);
+ assert.ok(!JSON.stringify(body).includes(key));assert.deepEqual(body.attempted_models,['gemini-2.5-flash-lite']);
+});

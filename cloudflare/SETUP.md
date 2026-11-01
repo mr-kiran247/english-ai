@@ -4,7 +4,7 @@ Worker URL: `https://englishai-api.kiran-sontakke247work.workers.dev`
 
 1. In the Worker dashboard click **Edit code**. Replace the entire Hello World script with `cloudflare/worker.js` and click **Deploy**.
 2. Open **Settings → Variables and Secrets → Add**. Select **Secret**, name it `GEMINI_API_KEY`, and paste the real Google AI Studio key into its value. Save/deploy. Never put the key in Worker source, the React code, GitHub, or chat.
-3. Visit the Worker URL. It should show `version: speakstep-worker-3` and `status: configured`. This health check does not call Google or validate the key. `missing_secret` means the secret has not been applied.
+3. Visit the Worker URL. It should show `version: speakstep-worker-4` and `status: configured`. This health check does not call Google or validate the key. `missing_secret` means the secret has not been applied.
 4. Upload/extract the updated `deploy/englishai-site.zip` into the Hostinger document root. Include the new `app-config.js`, updated `index.html`, and assets. Preserve your existing private configuration and files. This build calls the Worker, so no PHP connection is needed for translation.
 5. Open `https://englishai.technokiran.online`, reload without cached files, and try a custom Marathi/Hindi sentence. Test actual translation before removing the old PHP endpoint.
 
@@ -24,7 +24,7 @@ Run `node tests/worker.test.js`, `node tests/translation.test.js` and `npm run b
 
 Deploy the latest Worker version and the new website ZIP. Cross-origin frontend requests carry JSON as text/plain to avoid an OPTIONS preflight. The Worker still validates JSON and limits body size. PHP rollback continues to send application/json. Do not use mode: no-cors, which would hide translations from the app.
 
-Confirm the Worker GET reports speakstep-worker-3, clear website cache, then retry. A network error now includes the exact endpoint and website origin. If it persists, those values and the browser Network/Console error are needed to distinguish content-security-policy restrictions, Cloudflare Access/challenges, DNS errors, and blocked origins. Direct GET success does not prove a browser cross-origin POST works. Public URLs could not be inspected from this execution environment because its outbound proxy denied those destinations.
+Confirm the Worker GET reports speakstep-worker-4, clear website cache, then retry. A network error now includes the exact endpoint and website origin. If it persists, those values and the browser Network/Console error are needed to distinguish content-security-policy restrictions, Cloudflare Access/challenges, DNS errors, and blocked origins. Direct GET success does not prove a browser cross-origin POST works. Public URLs could not be inspected from this execution environment because its outbound proxy denied those destinations.
 
 ## Worker v3: Gemini timeouts
 
@@ -37,3 +37,7 @@ https://englishai-api.kiran-sontakke247work.workers.dev/?check=google
 This read-only diagnostic performs an 8-second authenticated Google model-list request. It returns no API key or raw provider error. `google: reachable` with `http_status: 200` proves the key can list models, not that sentence generation works. `google: rejected` plus 400/403 points to Google project/key access. `google: unreachable` with `stage: model_catalog` means even the non-generation Google call failed or timed out; changing prompts or waiting longer on a single model will not resolve that fact. Share this diagnostic JSON if translation still fails, without sharing the Secret.
 
 Tests cover successful model-timeout recovery and both-model timeouts using simulated Google responses; these are not live Cloudflare/Gemini verification.
+
+## Worker v4: listed model still returns 404
+
+Only replace/deploy the Worker script. Keep the website build and Secret unchanged. Model discovery now includes the advertised gemini-flash-lite-latest and gemini-flash-latest aliases. It skips models already attempted, tries at most two new advertised candidates on 404 within the existing deadline, and no longer equates a generation 404 with an empty model list. Persistent 404s include the attempted model name and a bounded provider explanation with API keys redacted. Check the actual explanation before changing keys, endpoints, or model IDs again.
