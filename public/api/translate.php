@@ -9,7 +9,7 @@ function respond(int $status, array $body): void {
     echo json_encode($body, JSON_UNESCAPED_UNICODE);
     exit;
 }
-const BACKEND_VERSION = '2026-11-01-config-fix';
+const BACKEND_VERSION = '2026-11-01-timeout-fix';
 function loadTutorConfig(): array {
     // Supports both public_html/api and public_html/englishai/api layouts.
     $candidates = array_unique([
@@ -89,13 +89,26 @@ if ($provider === 'openai') {
     $payload = ['systemInstruction' => ['parts' => [['text' => $instruction]]], 'contents' => [['role' => 'user', 'parts' => [['text' => $text]]]], 'generationConfig' => ['responseMimeType' => 'application/json']];
 }
 function providerRequest(string $url, array $headers, ?array $payload): array {
+    // Share a total budget across initial request, catalog lookup and retry.
+    $remaining = (int) floor(65 - (microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true))));
+    if ($remaining < 1) respond(504, ['error'=>'Translation exceeded its total time limit. Please try again later.']);
     $curl = curl_init($url);
-    $options = [CURLOPT_HTTPHEADER=>$headers, CURLOPT_RETURNTRANSFER=>true, CURLOPT_CONNECTTIMEOUT=>10, CURLOPT_TIMEOUT=>20, CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2];
+    $options = [CURLOPT_HTTPHEADER=>$headers, CURLOPT_RETURNTRANSFER=>true, CURLOPT_CONNECTTIMEOUT=>min(10, $remaining), CURLOPT_TIMEOUT=>min(45, $remaining), CURLOPT_IPRESOLVE=>CURL_IPRESOLVE_V4, CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2];
     if ($payload !== null) { $options[CURLOPT_POST]=true; $options[CURLOPT_POSTFIELDS]=json_encode($payload); }
     curl_setopt_array($curl, $options);
     $response = curl_exec($curl);
     $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    $errorCode = curl_errno($curl);
+    $connected = curl_getinfo($curl, CURLINFO_CONNECT_TIME) > 0;
     curl_close($curl);
+    if ($response === false) {
+        if ($errorCode === 28) respond(504, ['error'=>$connected
+            ? 'Connected to the AI service, but it did not respond within the time limit. Please retry a short sentence. If this persists, contact Hostinger about outbound HTTPS to generativelanguage.googleapis.com:443.'
+            : 'The server timed out before establishing a connection to the AI service. Ask Hostinger to check DNS and outbound HTTPS access to generativelanguage.googleapis.com:443.']);
+        if ($errorCode === 6 || $errorCode === 7) respond(502, ['error'=>'The server could not resolve or connect to the AI service (cURL ' . $errorCode . '). Ask Hostinger to check outbound HTTPS to generativelanguage.googleapis.com:443.']);
+        if ($errorCode === 60) respond(502, ['error'=>'The server could not verify the AI service TLS certificate. Ask Hostinger to update PHP cURL CA certificates. Do not disable TLS verification.']);
+        respond(502, ['error'=>'AI connection failed (cURL ' . $errorCode . '). Please try again later.']);
+    }
     return [$response, $status];
 }
 [$response, $status] = providerRequest($url, $headers, $payload);

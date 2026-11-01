@@ -39,7 +39,7 @@ const mocks=`<?php namespace Fixture;
 foreach (['CURLOPT_HTTPHEADER','CURLOPT_RETURNTRANSFER','CURLOPT_CONNECTTIMEOUT','CURLOPT_TIMEOUT','CURLOPT_SSL_VERIFYPEER','CURLOPT_SSL_VERIFYHOST','CURLOPT_POST','CURLOPT_POSTFIELDS','CURLINFO_HTTP_CODE'] as $i=>$name) defined($name) || define($name,$i+1);
 $GLOBALS['calls']=0;
 function curl_init($url){return (object)['url'=>$url];}
-function curl_setopt_array($curl,$options){$curl->options=$options;return true;}
+function curl_setopt_array($curl,$options){$curl->options=$options;if($options[CURLOPT_IPRESOLVE]!==CURL_IPRESOLVE_V4)throw new \\Exception('IPv4 missing');if($options[CURLOPT_TIMEOUT]<=20||$options[CURLOPT_TIMEOUT]>65)throw new \\Exception('Timeout budget incorrect');if(!$options[CURLOPT_SSL_VERIFYPEER])throw new \\Exception('TLS verification disabled');return true;}
 function curl_exec($curl){
  $i=$GLOBALS['calls']++;
  if($i===0){if(!str_contains($curl->url,'gemini-0.0-flash:generateContent'))throw new \\Exception('Wrong original URL');return '{"error":{"status":"NOT_FOUND"}}';}
@@ -47,6 +47,7 @@ function curl_exec($curl){
  if(!str_contains($curl->url,'gemini-9.0-flash:generateContent'))throw new \\Exception('Wrong fallback URL');
  return json_encode(['candidates'=>[['content'=>['parts'=>[['thought'=>true,'text'=>'internal reasoning'],['text'=>json_encode(['en'=>'Have you eaten?','tip'=>'A question about a completed action.'])]]]]]]);
 }
+function curl_errno($curl){return 0;}
 function curl_getinfo($curl,$option){return $GLOBALS['calls']===1?404:200;}
 function curl_close($curl){}
 require '/site/public_html/api/mock-translate.php';`;
@@ -55,5 +56,13 @@ const translated=await php.run({scriptPath:'/site/public_html/api/fixture.php',m
 assert.equal(translated.httpStatusCode,200,translated.text+' '+translated.errors);
 assert.deepEqual(JSON.parse(translated.text),{en:'Have you eaten?',tip:'A question about a completed action.'});
 console.log('PASS 404 model discovery, retry and thought filtering (mock provider)');checks++;
+// Simulate a connection timeout without waiting or making a network request.
+const timeoutMocks=mocks.replace('function curl_errno($curl){return 0;}', 'function curl_errno($curl){return 28;}').replace('return $GLOBALS[\'calls\']===1?404:200;', 'return 0;').replace("$i=$GLOBALS['calls']++;", "return false; $i=$GLOBALS['calls']++;");
+php.writeFile('/site/public_html/api/timeout.php',timeoutMocks);
+const timedOut=await php.run({scriptPath:'/site/public_html/api/timeout.php',method:'POST',headers:{'Content-Type':'application/json'},body:new TextEncoder().encode(JSON.stringify({text:'नमस्कार',language:'mr'}))});
+assert.equal(timedOut.httpStatusCode,504,timedOut.text);
+assert.match(JSON.parse(timedOut.text).error,/before establishing a connection/);
+assert.ok(!timedOut.text.includes('test-secret'));
+console.log('PASS connection timeout diagnostic with secret redaction');checks++;
 console.log(`${checks} PHP runtime checks passed`);
 php.exit();
