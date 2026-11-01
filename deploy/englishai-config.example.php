@@ -1,10 +1,9 @@
 <?php
-// Copy to englishai-config.php ONE LEVEL ABOVE the subdomain document root.
-// Example: website /public_html/englishai => config /public_html/englishai-config.php
-// Ensure this location is not served by another website; see HOSTINGER-AI.md.
+// Save as private/englishai-config.php, with private NEXT TO public_html.
+// Keep your real API key on Hostinger only. Never commit it to GitHub.
 return [
-    'provider' => 'gemini', // 'openai' or 'gemini'
+    'provider' => 'gemini',
     'api_key' => 'REPLACE_ON_SERVER_ONLY',
-    // Omit model to use the provider default; optionally specify a supported model.
+    'model' => 'gemini-2.5-flash',
     'daily_limit' => 100,
 ];

@@ -32,7 +32,7 @@ function App(){
   setLesson(null);setMessage('');
   if(found){setLesson(found);return;}
   setTranslating(true);
-  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),50000);
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),75000);
   try{
    const response=await fetch('/api/translate.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:input.trim(),language}),signal:controller.signal});
    let data;try{data=await response.json()}catch{throw new Error('Translation server is unavailable. Check that the updated api folder is uploaded and PHP is enabled on Hostinger.');}
